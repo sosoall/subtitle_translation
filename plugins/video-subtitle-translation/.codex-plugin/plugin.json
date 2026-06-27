@@ -1,0 +1,33 @@
+{
+  "name": "video-subtitle-translation",
+  "version": "0.1.0",
+  "description": "Generate bilingual or translated SRT subtitle files for CapCut/Jianying workflows.",
+  "author": {
+    "name": "Video Subtitle Translation Contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "subtitles",
+    "translation",
+    "whisper",
+    "srt",
+    "video"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Video Subtitle Translation",
+    "shortDescription": "Generate bilingual SRT subtitles for editing apps.",
+    "longDescription": "Generate bilingual or translated-only SRT files from exported video or audio, with context-aware translation and meaning-aware sentence breaks that fit landscape and portrait videos. Import the SRT into CapCut/Jianying to continue styling and editing.",
+    "developerName": "Video Subtitle Translation Contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Write",
+      "Shell"
+    ],
+    "defaultPrompt": [
+      "Create Chinese bilingual SRT subtitles for this video.",
+      "Translate this exported video into editable SRT subtitles.",
+      "Generate portrait-friendly bilingual subtitles for CapCut."
+    ]
+  }
+}
