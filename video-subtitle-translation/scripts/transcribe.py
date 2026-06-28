@@ -327,6 +327,11 @@ def word_gap(prev_word: Dict[str, Any], next_word: Dict[str, Any]) -> float:
     return max(0.0, next_start - prev_end)
 
 
+def has_trailing_punct(words: List[Dict[str, Any]]) -> bool:
+    text = join_words(words)
+    return bool(text) and text[-1] in PUNCT_BREAK
+
+
 def join_words(words: List[Dict[str, Any]]) -> str:
     text = "".join(w.get("word", "") for w in words).strip()
     # Whisper's English word tokens usually include leading spaces. This cleanup
@@ -378,13 +383,61 @@ def should_break(current_words: List[Dict[str, Any]], next_word: Optional[Dict[s
         return True
     if width >= soft_chars and gap >= max_gap:
         return True
-    if width >= max_chars:
-        return True
     if duration >= max_secs and gap >= max_gap:
         return True
     if duration >= max_secs * 1.4:
         return True
     return False
+
+
+def find_semantic_break_index(words: List[Dict[str, Any]], max_chars: int,
+                              soft_chars: int, min_chars: int,
+                              max_gap: float) -> Optional[int]:
+    if len(words) < 2:
+        return None
+
+    best_index = None
+    best_score = -1.0
+    # Only split between tokens. This avoids cutting inside CJK terms when
+    # Whisper returns a phrase as one token.
+    for index in range(1, len(words)):
+        left = words[:index]
+        right = words[index:]
+        left_text = join_words(left)
+        right_text = join_words(right)
+        if text_len(left_text) < min_chars or text_len(right_text) < min_chars:
+            continue
+
+        left_width = display_width(left_text)
+        gap = word_gap(left[-1], right[0])
+        last_char = left_text[-1] if left_text else ""
+
+        score = 0.0
+        if last_char in STRONG_PUNCT:
+            score += 100
+        elif last_char in SOFT_PUNCT:
+            score += 80
+        if gap >= max_gap:
+            score += 50 + min(gap, 1.5) * 10
+
+        # Prefer boundaries near the existing max/soft budgets, but do not let
+        # width alone outrank punctuation, pause, or semantic review.
+        score -= abs(left_width - max_chars) * 0.8
+        if left_width >= soft_chars:
+            score += 8
+        if left_width > max_chars:
+            score -= (left_width - max_chars) * 2
+
+        if score > best_score:
+            best_score = score
+            best_index = index
+
+    if best_index is None:
+        return None
+
+    if best_score >= 20:
+        return best_index
+    return None
 
 
 def build_subtitle_segments(raw_segments: List[Dict[str, Any]], max_chars: int,
@@ -412,6 +465,19 @@ def build_subtitle_segments(raw_segments: List[Dict[str, Any]], max_chars: int,
                 "text": join_words(current),
             })
             current = []
+        elif display_width(join_words(current)) > max_chars * 1.35 and not has_trailing_punct(current):
+            break_index = find_semantic_break_index(
+                current, max_chars, soft_chars, min_chars, max_gap
+            )
+            if break_index is not None:
+                segment_words = current[:break_index]
+                current = current[break_index:]
+                segments.append({
+                    "id": len(segments),
+                    "start": round(segment_words[0]["start"], 3),
+                    "end": round(segment_words[-1]["end"], 3),
+                    "text": join_words(segment_words),
+                })
 
     if current:
         segments.append({

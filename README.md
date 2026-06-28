@@ -19,7 +19,8 @@
 
 - 翻译更准确：翻译时会看上下文，不容易因为一句话被切开而丢失意思。
 - 横竖屏自适配：会根据视频是横屏、竖屏还是方形，自动控制每条字幕的屏幕宽度，竖屏会切得更短。
-- 按意思断句：会检查字幕片段是否表达完整，避免断句破坏原句意思。
+- 按意思断句：优先保留完整意思，不会为了卡字数把词语或专有名词切开。
+- 忠实原文：只做术语级错字修正，不改写说话内容。
 - 输出 SRT：方便导入剪映/CapCut 后继续编辑字幕样式，而不是直接烧录到视频里。
 
 ### 产物是什么
@@ -45,7 +46,15 @@
 - 空格也会占宽度。
 - `--min-chars 5` 保持为非空白字符数下限，用来避免太短的碎片。
 
-第一轮切分会先看原文。翻译后，Agent 还会检查译文是否过长：如果译文太长，会优先压缩翻译；如果仍然放不下，再按语义拆分原片段。竖屏视频会比横屏更严格。
+切分以原始语言为准，不会同时拿目标翻译语言重新判断断句。竖屏视频会比横屏更严格，但意思完整优先于字数；不会为了卡长度把“竖屏”这类词拆开。
+
+### 文本和标点规则
+
+- 原文字幕必须忠实 Whisper 转录内容。
+- 可以修正明显的术语错误或错别字。
+- 不能改写、润色或重组说话内容。
+- 原始语言和目标语言都保留逗号、引号、冒号、分号、问号、感叹号等有意义标点。
+- 最终 SRT 会去掉行尾句号/英文句点。
 
 ### 推荐工作流
 
@@ -192,7 +201,8 @@ It does not burn subtitles into the video. It outputs an editable subtitle file.
 
 - More accurate translation: it translates with surrounding context, so meaning is less likely to be lost when a sentence is split.
 - Landscape/portrait adaptation: it adjusts subtitle display width for landscape, portrait, or square videos, with stricter limits for vertical videos.
-- Meaning-aware breaks: it reviews sentence boundaries so subtitles do not split in ways that damage the meaning.
+- Meaning-aware breaks: it prioritizes complete meaning and avoids splitting inside words, terms, or proper nouns.
+- Faithful source text: it allows terminology-level typo fixes but does not rewrite what the speaker said.
 - SRT output: it produces subtitle files that can still be styled and edited in CapCut/Jianying.
 
 ### What It Produces
@@ -218,7 +228,15 @@ The script auto-selects subtitle budgets for landscape, portrait, or square vide
 - Spaces also take width.
 - `--min-chars 5` stays as a non-whitespace character floor to avoid tiny fragments.
 
-The first pass segments the source transcript. After translation, the agent should also check whether the translated line is too long. If it is, it should first make the translation more concise; if that still does not fit, it should split the source segment at a semantic boundary and translate the new segments. Portrait videos are treated more strictly than landscape videos.
+Segmentation is based on the source language, not both the source and target translation language at the same time. Portrait videos are treated more strictly than landscape videos, but complete meaning comes before width limits. The workflow should not split inside words or terms only to satisfy a length budget.
+
+### Text And Punctuation Rules
+
+- Source subtitles must stay faithful to the Whisper transcript.
+- Obvious terminology mistakes or transcription typos may be fixed.
+- Do not rewrite, polish, or reorganize what the speaker said.
+- Keep meaningful punctuation in both source and target language, including commas, quotation marks, colons, semicolons, question marks, and exclamation marks.
+- Final SRT lines remove terminal periods/full stops.
 
 ### Recommended Workflow
 

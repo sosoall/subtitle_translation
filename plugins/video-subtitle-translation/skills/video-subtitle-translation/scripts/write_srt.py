@@ -10,6 +10,11 @@ Usage:
 import argparse
 import json
 import os
+import re
+
+
+TERMINAL_PERIODS = ".。"
+TERMINAL_PERIOD_RE = re.compile(r"[.。]+(?=[$\\s\"'”’）)\]}》」』】]*$)")
 
 
 def ts(seconds: float) -> str:
@@ -18,6 +23,16 @@ def ts(seconds: float) -> str:
     m, rem = divmod(rem, 60_000)
     s, ms = divmod(rem, 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def clean_subtitle_text(text: str) -> str:
+    text = re.sub(r"\s+", " ", text.strip())
+    while True:
+        cleaned = TERMINAL_PERIOD_RE.sub("", text).strip()
+        if cleaned == text:
+            break
+        text = cleaned
+    return text
 
 
 def main():
@@ -39,8 +54,8 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(args.output)) or ".", exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as f:
         for i, seg in enumerate(segments, start=1):
-            original = seg["text"].strip()
-            translated = tmap.get(seg["id"], original)
+            original = clean_subtitle_text(seg["text"])
+            translated = clean_subtitle_text(tmap.get(seg["id"], original))
             f.write(f"{i}\n")
             f.write(f"{ts(seg['start'])} --> {ts(seg['end'])}\n")
             if args.mode == "bilingual":

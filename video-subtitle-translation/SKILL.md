@@ -95,11 +95,11 @@ Default layout presets keep the existing `--max-chars`, `--soft-chars`, and `--m
 | `bilingual` | `--max-chars 22 --soft-chars 14 --min-chars 5` | `--max-chars 26 --soft-chars 18 --min-chars 5` | `--max-chars 28 --soft-chars 20 --min-chars 5` |
 | `translated` | `--max-chars 26 --soft-chars 18 --min-chars 5` | `--max-chars 32 --soft-chars 22 --min-chars 5` | `--max-chars 42 --soft-chars 28 --min-chars 5` |
 
-These presets are applied to the source transcript during first-pass segmentation. After translation, also check the translated line against the same layout goal:
+These presets are applied to the source transcript during first-pass segmentation:
 
-- In `bilingual` mode, both the source line and translated line must be comfortable for the video layout.
-- In `translated` mode, the translated line is the primary display constraint.
-- For portrait videos, be stricter than landscape. If in doubt, split shorter.
+- Segment length is based on the source transcript.
+- Do not split only because the translated text might be longer.
+- For portrait videos, be stricter than landscape, but meaning still comes first.
 
 ## Step 2 - Review Sentence Breaks
 
@@ -119,13 +119,14 @@ Treat these segments as a machine-generated draft. Before translating, revise br
 
 Rules:
 
-1. Keep complete meaning units together when possible.
-2. Split at clear clause boundaries when both sides remain understandable.
-3. Do not leave dangling fragments such as "which can help me find" or "out whether this is".
-4. Do not split fixed expressions, names, product names, or noun phrases unless they are too long to fit.
-5. For bilingual subtitles, keep source cards short enough that the original and translation can both fit comfortably.
-6. For vertical videos, prefer shorter cards even if landscape would allow longer text.
-7. If changing boundaries, keep timestamps monotonic and IDs sequential.
+1. Preserve the original wording from Whisper. You may fix obvious terminology mistakes or transcription typos, but do not paraphrase or rewrite what the speaker said.
+2. Meaning is the first priority. Width limits are secondary.
+3. Keep complete meaning units together when possible.
+4. Split at clear clause boundaries when both sides remain understandable.
+5. Never split inside a word, term, name, fixed expression, product name, or noun phrase. For example, do not split inside `竖屏`.
+6. Do not leave dangling fragments such as "which can help me find" or "out whether this is".
+7. For vertical videos, prefer shorter cards, but not at the cost of splitting a word or damaging meaning.
+8. If changing boundaries, keep timestamps monotonic and IDs sequential.
 
 Example:
 
@@ -143,14 +144,15 @@ Better:
 
 Do not call an external translation API unless the user explicitly asks. Translate the reviewed segments yourself with full context.
 
-For long files, work in batches of about 150 segments with 15-20 overlapping context segments. Preserve IDs exactly. If a translation becomes unclear because the source break is bad, revise the reviewed segments first, then translate again.
+For long files, work in batches of about 150 segments with 15-20 overlapping context segments. Preserve IDs exactly. If a translation becomes unclear because the source break is bad, revise the reviewed source segments first, then translate again.
 
-After translation, do a layout pass before writing SRT:
+Translation rules:
 
-1. Compare source and translation lengths by approximate display width, not just raw characters.
-2. If a translation is too long for the detected layout, first make the translation more concise while preserving meaning.
-3. If concise translation is still too long, split the source segment at a clear semantic boundary, adjust timestamps proportionally when needed, then translate the new segments.
-4. Keep portrait videos tighter than landscape because bilingual subtitles need two readable lines.
+1. Translate according to the reviewed source segment boundaries.
+2. Do not re-split based on translated-language length alone.
+3. Keep translations concise, but do not omit meaning.
+4. Preserve punctuation style for commas, quotation marks, colons, and similar in both source and target language.
+5. Remove terminal periods/full stops from final subtitle text. Keep commas, quotation marks, colons, semicolons, question marks, and exclamation marks when they carry meaning.
 
 Prompt pattern:
 
@@ -160,6 +162,9 @@ Translate the following subtitle segments to [TARGET LANGUAGE].
 These are semantic subtitle cards for a video.
 Use surrounding segments as context.
 Keep translations concise enough for subtitles.
+Do not omit meaning to make the line shorter.
+Keep commas, quotation marks, and colons when useful.
+Do not end subtitles with a period/full stop.
 Preserve every ID exactly.
 
 Return ONLY valid JSON: {"41": "translation", "42": "translation"}
@@ -188,6 +193,8 @@ python3 /path/to/skill/scripts/write_srt.py \
 
 `--mode bilingual` writes original plus translation.
 `--mode translated` writes translation only.
+
+The SRT writer removes terminal periods/full stops from both original and translated lines. It preserves commas, quotation marks, colons, question marks, and exclamation marks.
 
 ## Step 5 - Deliver And Explain How To Use
 
