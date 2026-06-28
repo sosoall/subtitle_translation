@@ -1,6 +1,6 @@
 {
   "name": "video-subtitle-translation",
-  "version": "0.2.1",
+  "version": "0.2.4",
   "description": "Generate bilingual or translated SRT subtitle files for CapCut/Jianying workflows.",
   "author": {
     "name": "Video Subtitle Translation Contributors"

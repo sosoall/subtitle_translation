@@ -52,7 +52,7 @@ The user should import the generated `.srt` into CapCut/Jianying or another edit
 Compared with CapCut/Jianying's built-in subtitle translation workflow, this skill focuses on better meaning preservation:
 
 1. It translates with full surrounding context, so meaning is less likely to be lost because a sentence was split.
-2. It adapts subtitle card length to portrait, square, or landscape videos, so vertical videos are less likely to overflow.
+2. It adapts subtitle card length to portrait or landscape videos, with square videos treated as landscape, so vertical videos are less likely to overflow.
 3. It reviews and adjusts breaks by meaning, so subtitles do not split in ways that damage the sentence.
 
 Do not claim this skill burns subtitles into the video. It outputs SRT files for downstream editing.
@@ -84,7 +84,7 @@ If automatic installation fails, give the exact manual install command from the 
 
 ## Step 1 - Transcribe And Segment
 
-Use `--model auto` unless the user requests a specific Whisper model. Use `--layout auto` so the script detects portrait, square, or landscape video and chooses subtitle lengths that fit the screen.
+Use `--model auto` unless the user requests a specific Whisper model. Use `--layout auto` so the script detects portrait or landscape video and chooses subtitle lengths that fit the screen. Square videos use the landscape preset.
 
 ```bash
 python3 /path/to/skill/scripts/transcribe.py \
@@ -120,14 +120,18 @@ python3 /path/to/skill/scripts/transcribe.py \
 
 Default layout presets keep the existing `--max-chars`, `--soft-chars`, and `--min-chars` option names. In the script, `max` and `soft` are now display-width budgets, not raw character counts: CJK/full-width characters count roughly as 2 units, Latin letters/digits count as 1 unit, and spaces count as 1 unit. `min-chars` remains a non-whitespace character floor so very short fragments are still merged.
 
-| Mode | Portrait | Square | Landscape |
-|---|---|---|---|
-| `bilingual` | `--max-chars 22 --soft-chars 14 --min-chars 5` | `--max-chars 26 --soft-chars 18 --min-chars 5` | `--max-chars 28 --soft-chars 20 --min-chars 5` |
-| `translated` | `--max-chars 26 --soft-chars 18 --min-chars 5` | `--max-chars 32 --soft-chars 22 --min-chars 5` | `--max-chars 42 --soft-chars 28 --min-chars 5` |
+| Mode | Portrait | Landscape |
+|---|---|---|
+| `bilingual` | `--max-chars 22 --soft-chars 14 --min-chars 5` | `--max-chars 24 --soft-chars 16 --min-chars 5` |
+| `translated` | `--max-chars 22 --soft-chars 14 --min-chars 5` | `--max-chars 24 --soft-chars 16 --min-chars 5` |
+
+Square videos are treated as landscape.
 
 These presets are applied to the source transcript during first-pass segmentation:
 
 - Segment length is based on the source transcript.
+- `max-chars` is a hard display-width limit. If a full sentence exceeds max, split that sentence again at the best available word boundary, pause, punctuation, or semantic boundary.
+- A full sentence ends at sentence-ending punctuation such as `.`, `?`, `!`, `;`, `。`, `？`, `！`, or `；`.
 - Do not split only because the translated text might be longer.
 - For portrait videos, be stricter than landscape, but meaning still comes first.
 
@@ -142,7 +146,16 @@ cat /tmp/segments.json
 Each entry:
 
 ```json
-{"id": 42, "start": 125.3, "end": 128.1, "text": "because the algorithm needs"}
+{
+  "id": 42,
+  "start": 125.3,
+  "end": 128.1,
+  "text": "because the algorithm needs",
+  "words": [
+    {"word": "because", "start": 125.3, "end": 125.7},
+    {"word": "the", "start": 125.7, "end": 125.9}
+  ]
+}
 ```
 
 Treat these segments as a machine-generated draft. Before translating, revise breaks so each subtitle card is understandable on its own and fits the layout.
@@ -155,7 +168,8 @@ Rules:
 4. Split at clear clause boundaries when both sides remain understandable.
 5. Never split inside a word, term, name, fixed expression, product name, or noun phrase.
 6. For vertical videos, prefer shorter cards, but not at the cost of splitting a word or damaging meaning.
-7. If changing boundaries, keep timestamps monotonic and IDs sequential.
+7. If changing boundaries, use the `words` timestamps to set accurate start/end times. Do not estimate from sentence text length when word timestamps are available.
+8. Keep timestamps monotonic and IDs sequential.
 
 ## Step 3 - Translate With Context
 

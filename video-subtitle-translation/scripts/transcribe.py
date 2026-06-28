@@ -33,18 +33,17 @@ MODEL_CHOICES = ["auto", "tiny", "base", "small", "medium", "large", "turbo"]
 LAYOUT_CHOICES = ["auto", "portrait", "landscape", "square"]
 MODE_CHOICES = ["bilingual", "translated"]
 STRONG_PUNCT = set(".?!。？！")
+SENTENCE_END_PUNCT = set(".?!;。？！；")
 SOFT_PUNCT = set(",，;；:：、")
 PUNCT_BREAK = STRONG_PUNCT | SOFT_PUNCT
 PRESETS = {
     "bilingual": {
         "portrait": {"max_chars": 22, "soft_chars": 14, "min_chars": 5},
-        "square": {"max_chars": 26, "soft_chars": 18, "min_chars": 5},
-        "landscape": {"max_chars": 28, "soft_chars": 20, "min_chars": 5},
+        "landscape": {"max_chars": 24, "soft_chars": 16, "min_chars": 5},
     },
     "translated": {
-        "portrait": {"max_chars": 26, "soft_chars": 18, "min_chars": 5},
-        "square": {"max_chars": 32, "soft_chars": 22, "min_chars": 5},
-        "landscape": {"max_chars": 42, "soft_chars": 28, "min_chars": 5},
+        "portrait": {"max_chars": 22, "soft_chars": 14, "min_chars": 5},
+        "landscape": {"max_chars": 24, "soft_chars": 16, "min_chars": 5},
     },
 }
 
@@ -191,6 +190,9 @@ def video_dimensions(path: str) -> Optional[tuple[int, int]]:
 
 def detect_layout(path: str, requested: str) -> str:
     if requested != "auto":
+        if requested == "square":
+            print("Layout square requested -> landscape preset", flush=True)
+            return "landscape"
         return requested
     dims = video_dimensions(path)
     if not dims:
@@ -199,10 +201,8 @@ def detect_layout(path: str, requested: str) -> str:
     width, height = dims
     if height > width:
         layout = "portrait"
-    elif width > height:
-        layout = "landscape"
     else:
-        layout = "square"
+        layout = "landscape"
     print(f"Layout auto: {width}x{height} -> {layout}", flush=True)
     return layout
 
@@ -332,6 +332,28 @@ def has_trailing_punct(words: List[Dict[str, Any]]) -> bool:
     return bool(text) and text[-1] in PUNCT_BREAK
 
 
+def has_sentence_end(words: List[Dict[str, Any]]) -> bool:
+    text = join_words(words)
+    return bool(text) and text[-1] in SENTENCE_END_PUNCT
+
+
+def make_segment(words: List[Dict[str, Any]], seg_id: int) -> Dict[str, Any]:
+    return {
+        "id": seg_id,
+        "start": round(words[0]["start"], 3),
+        "end": round(words[-1]["end"], 3),
+        "text": join_words(words),
+        "words": [
+            {
+                "word": w["word"],
+                "start": round(float(w["start"]), 3),
+                "end": round(float(w["end"]), 3),
+            }
+            for w in words
+        ],
+    }
+
+
 def join_words(words: List[Dict[str, Any]]) -> str:
     text = "".join(w.get("word", "") for w in words).strip()
     # Whisper's English word tokens usually include leading spaces. This cleanup
@@ -377,7 +399,7 @@ def should_break(current_words: List[Dict[str, Any]], next_word: Optional[Dict[s
 
     if next_word is None:
         return True
-    if last_char in STRONG_PUNCT:
+    if last_char in SENTENCE_END_PUNCT:
         return True
     if last_char in SOFT_PUNCT and min_length >= min_chars:
         return True
@@ -392,7 +414,7 @@ def should_break(current_words: List[Dict[str, Any]], next_word: Optional[Dict[s
 
 def find_semantic_break_index(words: List[Dict[str, Any]], max_chars: int,
                               soft_chars: int, min_chars: int,
-                              max_gap: float) -> Optional[int]:
+                              max_gap: float, require_within_max: bool = False) -> Optional[int]:
     if len(words) < 2:
         return None
 
@@ -413,7 +435,7 @@ def find_semantic_break_index(words: List[Dict[str, Any]], max_chars: int,
         last_char = left_text[-1] if left_text else ""
 
         score = 0.0
-        if last_char in STRONG_PUNCT:
+        if last_char in SENTENCE_END_PUNCT:
             score += 100
         elif last_char in SOFT_PUNCT:
             score += 80
@@ -426,6 +448,8 @@ def find_semantic_break_index(words: List[Dict[str, Any]], max_chars: int,
         if left_width >= soft_chars:
             score += 8
         if left_width > max_chars:
+            if require_within_max:
+                continue
             score -= (left_width - max_chars) * 2
 
         if score > best_score:
@@ -440,13 +464,52 @@ def find_semantic_break_index(words: List[Dict[str, Any]], max_chars: int,
     return None
 
 
+def split_to_max_width(words: List[Dict[str, Any]], max_chars: int,
+                       soft_chars: int, min_chars: int,
+                       max_gap: float) -> List[List[Dict[str, Any]]]:
+    chunks: List[List[Dict[str, Any]]] = []
+    remaining = list(words)
+
+    while remaining and display_width(join_words(remaining)) > max_chars:
+        break_index = find_semantic_break_index(
+            remaining, max_chars, soft_chars, min_chars, max_gap, require_within_max=True
+        )
+        if break_index is None:
+            # Hard max still cannot cut inside a Whisper token. Cut at the
+            # longest token boundary that stays within max; if no such boundary
+            # exists, emit the single token and let review handle the rare case.
+            break_index = 1
+            for index in range(1, len(remaining) + 1):
+                if display_width(join_words(remaining[:index])) <= max_chars:
+                    break_index = index
+                else:
+                    break
+            if break_index >= len(remaining):
+                break
+
+        chunks.append(remaining[:break_index])
+        remaining = remaining[break_index:]
+
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
+def append_segment_chunks(segments: List[Dict[str, Any]], words: List[Dict[str, Any]],
+                          max_chars: int, soft_chars: int, min_chars: int,
+                          max_gap: float):
+    for chunk in split_to_max_width(words, max_chars, soft_chars, min_chars, max_gap):
+        if chunk:
+            segments.append(make_segment(chunk, len(segments)))
+
+
 def build_subtitle_segments(raw_segments: List[Dict[str, Any]], max_chars: int,
                             soft_chars: int, min_chars: int,
                             max_secs: float, max_gap: float) -> List[Dict[str, Any]]:
     words = flatten_words(raw_segments)
     if not words:
         return [
-            {"id": i, "start": s["start"], "end": s["end"], "text": s["text"].strip()}
+            {"id": i, "start": s["start"], "end": s["end"], "text": s["text"].strip(), "words": []}
             for i, s in enumerate(raw_segments)
             if s.get("text", "").strip()
         ]
@@ -458,39 +521,45 @@ def build_subtitle_segments(raw_segments: List[Dict[str, Any]], max_chars: int,
         current.append(word)
         next_word = words[i + 1] if i + 1 < len(words) else None
         if should_break(current, next_word, max_chars, soft_chars, min_chars, max_secs, max_gap):
-            segments.append({
-                "id": len(segments),
-                "start": round(current[0]["start"], 3),
-                "end": round(current[-1]["end"], 3),
-                "text": join_words(current),
-            })
+            append_segment_chunks(segments, current, max_chars, soft_chars, min_chars, max_gap)
             current = []
-        elif display_width(join_words(current)) > max_chars * 1.35 and not has_trailing_punct(current):
+        elif display_width(join_words(current)) > max_chars and not has_trailing_punct(current):
             break_index = find_semantic_break_index(
-                current, max_chars, soft_chars, min_chars, max_gap
+                current, max_chars, soft_chars, min_chars, max_gap, require_within_max=True
             )
             if break_index is not None:
                 segment_words = current[:break_index]
                 current = current[break_index:]
-                segments.append({
-                    "id": len(segments),
-                    "start": round(segment_words[0]["start"], 3),
-                    "end": round(segment_words[-1]["end"], 3),
-                    "text": join_words(segment_words),
-                })
+                append_segment_chunks(
+                    segments, segment_words, max_chars, soft_chars, min_chars, max_gap
+                )
 
     if current:
-        segments.append({
-            "id": len(segments),
-            "start": round(current[0]["start"], 3),
-            "end": round(current[-1]["end"], 3),
-            "text": join_words(current),
-        })
+        append_segment_chunks(segments, current, max_chars, soft_chars, min_chars, max_gap)
 
-    return merge_short_segments([s for s in segments if s["text"]], min_chars)
+    return merge_short_segments([s for s in segments if s["text"]], min_chars, max_chars)
 
 
-def merge_short_segments(segments: List[Dict[str, Any]], min_chars: int) -> List[Dict[str, Any]]:
+def segment_text(seg: Dict[str, Any]) -> str:
+    words = seg.get("words") or []
+    if words:
+        return join_words(words)
+    return seg.get("text", "").strip()
+
+
+def merged_segment(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(left)
+    merged["end"] = right["end"]
+    merged["words"] = left.get("words", []) + right.get("words", [])
+    if merged["words"]:
+        merged["text"] = join_words(merged["words"])
+    else:
+        merged["text"] = join_text(left["text"], right["text"])
+    return merged
+
+
+def merge_short_segments(segments: List[Dict[str, Any]], min_chars: int,
+                         max_chars: Optional[int] = None) -> List[Dict[str, Any]]:
     if not segments or min_chars <= 1:
         return segments
 
@@ -498,27 +567,37 @@ def merge_short_segments(segments: List[Dict[str, Any]], min_chars: int) -> List
     i = 0
     while i < len(segments):
         seg = dict(segments[i])
-        if text_len(seg["text"]) >= min_chars or len(segments) == 1:
+        if text_len(segment_text(seg)) >= min_chars or len(segments) == 1:
             result.append(seg)
             i += 1
             continue
 
         if result:
             prev = result[-1]
-            prev["end"] = seg["end"]
-            prev["text"] = join_text(prev["text"], seg["text"])
+            candidate = merged_segment(prev, seg)
+            if max_chars is not None and display_width(candidate["text"]) > max_chars:
+                result.append(seg)
+            else:
+                result[-1] = candidate
         elif i + 1 < len(segments):
             nxt = dict(segments[i + 1])
-            nxt["start"] = seg["start"]
-            nxt["text"] = join_text(seg["text"], nxt["text"])
-            result.append(nxt)
-            i += 1
+            candidate = merged_segment(seg, nxt)
+            candidate["start"] = seg["start"]
+            if max_chars is not None and display_width(candidate["text"]) > max_chars:
+                result.append(seg)
+            else:
+                result.append(candidate)
+                i += 1
         else:
             result.append(seg)
         i += 1
 
     for new_id, seg in enumerate(result):
         seg["id"] = new_id
+        if seg.get("words"):
+            seg["start"] = round(seg["words"][0]["start"], 3)
+            seg["end"] = round(seg["words"][-1]["end"], 3)
+            seg["text"] = join_words(seg["words"])
     return result
 
 

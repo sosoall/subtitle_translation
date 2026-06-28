@@ -18,7 +18,7 @@
 ### 相比剪映/CapCut 自动字幕翻译的优势
 
 - 翻译更准确：翻译时会看上下文，不容易因为一句话被切开而丢失意思。
-- 横竖屏自适配：会根据视频是横屏、竖屏还是方形，自动控制每条字幕的屏幕宽度，竖屏会切得更短。
+- 横竖屏自适配：会根据视频是横屏还是竖屏，自动控制每条字幕的屏幕宽度，方形视频按横屏处理，竖屏会切得更短。
 - 按意思断句：优先保留完整意思，不会为了卡字数把词语或专有名词切开。
 - 忠实原文：只做术语级错字修正，不改写说话内容。
 - 输出 SRT：方便导入剪映/CapCut 后继续编辑字幕样式，而不是直接烧录到视频里。
@@ -33,20 +33,28 @@
 过程中还可能产生：
 
 - `segments.json`：识别出来的字幕片段
+- `segments.json` 里也包含每个词的开始/结束时间，方便后续重新断句时保持时间准确
 - `translations.json`：每条字幕对应的翻译
 
 真正需要导入剪映/CapCut 的是 `.srt` 文件。
 
 ### 字幕长度如何控制
 
-脚本会根据视频比例自动选择横屏、竖屏或方形字幕长度。参数名仍然叫 `--max-chars` 和 `--soft-chars`，但实际含义更接近“屏幕显示宽度”：
+脚本会根据视频比例自动选择横屏或竖屏字幕长度，方形视频按横屏处理。参数名仍然叫 `--max-chars` 和 `--soft-chars`，但实际含义更接近“屏幕显示宽度”：
 
 - 中文、日文、韩文等全宽字符大约按 2 个宽度单位计算。
 - 英文字母、数字大约按 1 个宽度单位计算。
 - 空格也会占宽度。
 - `--min-chars 5` 保持为非空白字符数下限，用来避免太短的碎片。
 
-切分以原始语言为准，不会同时拿目标翻译语言重新判断断句。竖屏视频会比横屏更严格，但意思完整优先于字数；不会为了卡长度把“竖屏”这类词拆开。
+`bilingual` 和 `translated` 使用同一套长度预设：
+
+| 视频比例 | max | soft | 约等于中文 | 约等于英文 |
+|---|---:|---:|---|---|
+| 竖屏 portrait | 22 | 14 | 最多约 11 个中文全宽字符 | 最多 22 个英文字母/数字/空格，通常约 3-4 个英文单词 |
+| 横屏 landscape | 24 | 16 | 最多约 12 个中文全宽字符 | 最多 24 个英文字母/数字/空格，通常约 4 个英文单词 |
+
+切分以原始语言为准，不会同时拿目标翻译语言重新判断断句。`max` 是硬性上限：如果一句完整的话超过 max，会在词边界、停顿、标点或语义边界上重新拆分。竖屏视频会比横屏更严格，但不会为了卡长度把词语拆开。
 
 ### 文本和标点规则
 
@@ -238,7 +246,7 @@ It does not burn subtitles into the video. It outputs an editable subtitle file.
 ### Advantages Over Built-In CapCut/Jianying Subtitle Translation
 
 - More accurate translation: it translates with surrounding context, so meaning is less likely to be lost when a sentence is split.
-- Landscape/portrait adaptation: it adjusts subtitle display width for landscape, portrait, or square videos, with stricter limits for vertical videos.
+- Landscape/portrait adaptation: it adjusts subtitle display width for landscape or portrait videos, treats square videos as landscape, and uses stricter limits for vertical videos.
 - Meaning-aware breaks: it prioritizes complete meaning and avoids splitting inside words, terms, or proper nouns.
 - Faithful source text: it allows terminology-level typo fixes but does not rewrite what the speaker said.
 - SRT output: it produces subtitle files that can still be styled and edited in CapCut/Jianying.
@@ -253,20 +261,28 @@ The final output is an `.srt` subtitle file:
 Intermediate files may include:
 
 - `segments.json`: recognized subtitle segments
+- `segments.json` also includes word-level start/end timestamps so later re-segmentation can keep accurate timing
 - `translations.json`: translations by subtitle ID
 
 The file you import into CapCut/Jianying is the `.srt` file.
 
 ### How Subtitle Length Is Controlled
 
-The script auto-selects subtitle budgets for landscape, portrait, or square videos. The option names are still `--max-chars` and `--soft-chars`, but they now behave more like display-width budgets:
+The script auto-selects subtitle budgets for landscape or portrait videos. Square videos are treated as landscape. The option names are still `--max-chars` and `--soft-chars`, but they now behave more like display-width budgets:
 
 - Chinese, Japanese, Korean, and other full-width characters count as about 2 width units.
 - Latin letters and digits count as about 1 width unit.
 - Spaces also take width.
 - `--min-chars 5` stays as a non-whitespace character floor to avoid tiny fragments.
 
-Segmentation is based on the source language, not both the source and target translation language at the same time. Portrait videos are treated more strictly than landscape videos, but complete meaning comes before width limits. The workflow should not split inside words or terms only to satisfy a length budget.
+`bilingual` and `translated` use the same length presets:
+
+| Layout | max | soft | Approx. CJK length | Approx. English length |
+|---|---:|---:|---|---|
+| Portrait | 22 | 14 | Up to about 11 full-width CJK characters | Up to 22 letters/digits/spaces, usually about 3-4 English words |
+| Landscape | 24 | 16 | Up to about 12 full-width CJK characters | Up to 24 letters/digits/spaces, usually about 4 English words |
+
+Segmentation is based on the source language, not both the source and target translation language at the same time. `max` is a hard limit: if a full sentence exceeds max, it is split again at a word boundary, pause, punctuation, or semantic boundary. Portrait videos are treated more strictly than landscape videos, but the workflow should not split inside words or terms only to satisfy a length budget.
 
 ### Text And Punctuation Rules
 
