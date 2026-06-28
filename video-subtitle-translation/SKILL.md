@@ -7,6 +7,36 @@ description: Use this skill when the user wants to generate bilingual subtitles,
 
 Generate bilingual or translated SRT subtitle files from a local video/audio file. The output is a subtitle file for editing tools such as CapCut/Jianying, not a rendered video with burned-in subtitles.
 
+## Preamble - Run First
+
+Run this update check at the start of each use when shell access is available:
+
+```bash
+_ROOT="$(cat "${VIDEO_SUBTITLE_TRANSLATION_STATE_DIR:-$HOME/.video-subtitle-translation}/install-root" 2>/dev/null || true)"
+if [ -n "$_ROOT" ] && [ -x "$_ROOT/bin/video-subtitle-translation-update-check" ]; then
+  _UPD="$("$_ROOT/bin/video-subtitle-translation-update-check" 2>/dev/null || true)"
+else
+  _UPD=""
+fi
+[ -n "$_UPD" ] && echo "$_UPD" || true
+```
+
+If output shows `UPGRADE_AVAILABLE <old> <new>`, tell the user:
+
+```text
+video-subtitle-translation v<new> is available. You are on v<old>. Want me to update it now?
+```
+
+If the user agrees, read `video-subtitle-translation-upgrade/SKILL.md` and follow its upgrade flow. If the user declines, snooze this version for 24 hours:
+
+```bash
+STATE_DIR="${VIDEO_SUBTITLE_TRANSLATION_STATE_DIR:-$HOME/.video-subtitle-translation}"
+mkdir -p "$STATE_DIR"
+echo "<new> $(($(date +%s) + 86400))" > "$STATE_DIR/update-snoozed"
+```
+
+If output shows `JUST_UPGRADED <old> <new>`, tell the user "Running video-subtitle-translation v<new>."
+
 ## User Outcome
 
 Help the user turn an edited video or exported audio file into:

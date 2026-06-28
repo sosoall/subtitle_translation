@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Check whether a newer video-subtitle-translation skill is available.
+#
+# Output:
+#   JUST_UPGRADED <old> <new>
+#   UPGRADE_AVAILABLE <old> <new>
+#   nothing when up to date, disabled, snoozed, or offline.
+set -euo pipefail
+
+ROOT_DIR="${VIDEO_SUBTITLE_TRANSLATION_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+STATE_DIR="${VIDEO_SUBTITLE_TRANSLATION_STATE_DIR:-$HOME/.video-subtitle-translation}"
+CACHE_FILE="$STATE_DIR/last-update-check"
+MARKER_FILE="$STATE_DIR/just-upgraded-from"
+SNOOZE_FILE="$STATE_DIR/update-snoozed"
+CONFIG_FILE="$STATE_DIR/config"
+VERSION_FILE="$ROOT_DIR/VERSION"
+REMOTE_URL="${VIDEO_SUBTITLE_TRANSLATION_REMOTE_VERSION_URL:-https://raw.githubusercontent.com/sosoall/subtitle_translation/main/VERSION}"
+
+if [ "${1:-}" = "--force" ]; then
+  rm -f "$CACHE_FILE" "$SNOOZE_FILE"
+fi
+
+if [ -f "$CONFIG_FILE" ] && grep -q '^update_check=false$' "$CONFIG_FILE"; then
+  exit 0
+fi
+
+mkdir -p "$STATE_DIR"
+
+LOCAL=""
+if [ -f "$VERSION_FILE" ]; then
+  LOCAL="$(tr -d '[:space:]' < "$VERSION_FILE")"
+fi
+[ -n "$LOCAL" ] || exit 0
+
+if [ -f "$MARKER_FILE" ]; then
+  OLD="$(tr -d '[:space:]' < "$MARKER_FILE" 2>/dev/null || true)"
+  rm -f "$MARKER_FILE" "$SNOOZE_FILE"
+  [ -n "$OLD" ] && echo "JUST_UPGRADED $OLD $LOCAL"
+fi
+
+check_snooze() {
+  local remote_ver="$1"
+  [ -f "$SNOOZE_FILE" ] || return 1
+  local snoozed_ver snoozed_epoch
+  snoozed_ver="$(awk '{print $1}' "$SNOOZE_FILE" 2>/dev/null || true)"
+  snoozed_epoch="$(awk '{print $2}' "$SNOOZE_FILE" 2>/dev/null || true)"
+  [ "$snoozed_ver" = "$remote_ver" ] || return 1
+  case "$snoozed_epoch" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$(date +%s)" -lt "$snoozed_epoch" ]
+}
+
+if [ -f "$CACHE_FILE" ]; then
+  if [ -z "$(find "$CACHE_FILE" -mmin +60 2>/dev/null || true)" ]; then
+    CACHED="$(cat "$CACHE_FILE" 2>/dev/null || true)"
+    case "$CACHED" in
+      UP_TO_DATE\ "$LOCAL") exit 0 ;;
+      UPGRADE_AVAILABLE\ "$LOCAL"\ *)
+        REMOTE="$(echo "$CACHED" | awk '{print $3}')"
+        check_snooze "$REMOTE" && exit 0
+        echo "$CACHED"
+        exit 0
+        ;;
+    esac
+  fi
+fi
+
+REMOTE="$(curl -fsSL --max-time 5 "$REMOTE_URL" 2>/dev/null | tr -d '[:space:]' || true)"
+if ! echo "$REMOTE" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)?$'; then
+  echo "UP_TO_DATE $LOCAL" > "$CACHE_FILE"
+  exit 0
+fi
+
+if [ "$LOCAL" = "$REMOTE" ]; then
+  echo "UP_TO_DATE $LOCAL" > "$CACHE_FILE"
+  exit 0
+fi
+
+HIGHER="$(printf '%s\n%s\n' "$LOCAL" "$REMOTE" | sort -V | tail -1)"
+if [ "$HIGHER" != "$REMOTE" ]; then
+  echo "UP_TO_DATE $LOCAL" > "$CACHE_FILE"
+  exit 0
+fi
+
+echo "UPGRADE_AVAILABLE $LOCAL $REMOTE" > "$CACHE_FILE"
+check_snooze "$REMOTE" && exit 0
+echo "UPGRADE_AVAILABLE $LOCAL $REMOTE"

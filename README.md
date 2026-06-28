@@ -97,25 +97,63 @@ winget install --id Gyan.FFmpeg -e
 python3 -m pip install openai-whisper
 ```
 
-### Clone 后如何作为 Skill 使用
+### 推荐安装方式：Git + Setup
 
-最简单的方式是把源码 skill 目录复制到你的 skills 目录。
+推荐使用 git 安装，这样 skill 可以检查新版本并提示更新。
 
 ```bash
-git clone <this-repo-url>
+mkdir -p ~/.agents/repos
+cd ~/.agents/repos
+git clone https://github.com/sosoall/subtitle_translation.git video-subtitle-translation
 cd video-subtitle-translation
-mkdir -p ~/.agents/skills
-cp -R video-subtitle-translation ~/.agents/skills/
+./setup
 ```
 
-安装后如果没有立即出现，请重启 Agent 或开启新会话。
+`./setup` 会把 skill 链接到 `~/.agents/skills/video-subtitle-translation`，并同时安装升级用的 `video-subtitle-translation-upgrade` skill。
+
+安装后如果没有立即出现，请重启 Codex 或开启新会话。
+
+### 从旧版 unzip 安装迁移
+
+如果你之前是用 `.skill` 解压安装的，建议先删除旧目录，再使用 git 安装，避免 Codex 扫到两份同名 skill。
+
+```bash
+rm -rf ~/.agents/skills/video-subtitle-translation
+
+mkdir -p ~/.agents/repos
+cd ~/.agents/repos
+git clone https://github.com/sosoall/subtitle_translation.git video-subtitle-translation
+cd video-subtitle-translation
+./setup
+```
+
+### 更新
+
+git 安装后，skill 每次使用时会检查远端 `VERSION`。如果有新版本，Codex 会提示你是否更新。
+
+你也可以手动更新：
+
+```bash
+cd ~/.agents/repos/video-subtitle-translation
+git pull --ff-only
+./setup
+```
+
+更新后重启 Codex 或开启新会话。
 
 ### 使用打包好的 `.skill`
 
-Release 包位于 `releases/video-subtitle-translation.skill`。它本质上是一个包含 `SKILL.md` 和脚本的 ZIP 包。
+Release 包仍然保留在 `releases/video-subtitle-translation.skill`，适合手动安装或不想使用 git 的用户。但这种方式不能可靠地自动更新。
 
 ```bash
 mkdir -p ~/.agents/skills
+unzip releases/video-subtitle-translation.skill -d ~/.agents/skills
+```
+
+如果使用 `.skill` 包更新，需要手动替换旧目录：
+
+```bash
+rm -rf ~/.agents/skills/video-subtitle-translation
 unzip releases/video-subtitle-translation.skill -d ~/.agents/skills
 ```
 
@@ -279,25 +317,63 @@ winget install --id Gyan.FFmpeg -e
 python3 -m pip install openai-whisper
 ```
 
-### Use After Cloning
+### Recommended Install: Git + Setup
 
-The simplest path is to copy the source skill directory into your skills directory.
+Git-based install is recommended because the skill can check for new versions and prompt you to upgrade.
 
 ```bash
-git clone <this-repo-url>
+mkdir -p ~/.agents/repos
+cd ~/.agents/repos
+git clone https://github.com/sosoall/subtitle_translation.git video-subtitle-translation
 cd video-subtitle-translation
-mkdir -p ~/.agents/skills
-cp -R video-subtitle-translation ~/.agents/skills/
+./setup
 ```
 
-Restart your agent or start a new session if the skill does not appear immediately.
+`./setup` links the skill into `~/.agents/skills/video-subtitle-translation` and also installs the `video-subtitle-translation-upgrade` skill.
+
+Restart Codex or start a new session if the skill does not appear immediately.
+
+### Migrate From An Old unzip Install
+
+If you previously installed by unzipping `.skill`, remove the old directory first, then install with git. This avoids duplicate skills with the same name.
+
+```bash
+rm -rf ~/.agents/skills/video-subtitle-translation
+
+mkdir -p ~/.agents/repos
+cd ~/.agents/repos
+git clone https://github.com/sosoall/subtitle_translation.git video-subtitle-translation
+cd video-subtitle-translation
+./setup
+```
+
+### Update
+
+With git install, the skill checks the remote `VERSION` each time it runs. If a new version is available, Codex asks whether you want to upgrade.
+
+You can also update manually:
+
+```bash
+cd ~/.agents/repos/video-subtitle-translation
+git pull --ff-only
+./setup
+```
+
+Restart Codex or start a new session after updating.
 
 ### Use The Packaged `.skill`
 
-The packaged skill is available at `releases/video-subtitle-translation.skill`. It is a ZIP archive containing `SKILL.md` and the bundled scripts.
+The packaged skill remains available at `releases/video-subtitle-translation.skill` for manual installs or users who do not want git. This mode cannot self-update reliably.
 
 ```bash
 mkdir -p ~/.agents/skills
+unzip releases/video-subtitle-translation.skill -d ~/.agents/skills
+```
+
+To update a `.skill` install manually:
+
+```bash
+rm -rf ~/.agents/skills/video-subtitle-translation
 unzip releases/video-subtitle-translation.skill -d ~/.agents/skills
 ```
 

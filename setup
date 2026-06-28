@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Install video-subtitle-translation as a git-backed Agent Skill.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_SRC="$ROOT_DIR/video-subtitle-translation"
+UPGRADE_SKILL_SRC="$ROOT_DIR/video-subtitle-translation-upgrade"
+SKILL_DEST="${VIDEO_SUBTITLE_TRANSLATION_SKILLS_DIR:-$HOME/.agents/skills}/video-subtitle-translation"
+UPGRADE_SKILL_DEST="${VIDEO_SUBTITLE_TRANSLATION_SKILLS_DIR:-$HOME/.agents/skills}/video-subtitle-translation-upgrade"
+STATE_DIR="${VIDEO_SUBTITLE_TRANSLATION_STATE_DIR:-$HOME/.video-subtitle-translation}"
+
+if [ ! -f "$SKILL_SRC/SKILL.md" ]; then
+  echo "setup failed: missing $SKILL_SRC/SKILL.md" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$SKILL_DEST")" "$STATE_DIR"
+
+install_skill_dir() {
+  local src="$1"
+  local dest="$2"
+  if [ -e "$dest" ] || [ -L "$dest" ]; then
+    if [ -L "$dest" ]; then
+      rm -f "$dest"
+    else
+      rm -rf "$dest"
+    fi
+  fi
+
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT)
+      cp -R "$src" "$dest"
+      echo "Installed by copy: $dest"
+      ;;
+    *)
+      ln -s "$src" "$dest"
+      echo "Installed by symlink: $dest -> $src"
+      ;;
+  esac
+}
+
+install_skill_dir "$SKILL_SRC" "$SKILL_DEST"
+install_skill_dir "$UPGRADE_SKILL_SRC" "$UPGRADE_SKILL_DEST"
+
+echo "$ROOT_DIR" > "$STATE_DIR/install-root"
+echo "video-subtitle-translation is ready. Restart Codex or start a new session."
