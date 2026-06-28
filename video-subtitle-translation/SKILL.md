@@ -153,22 +153,9 @@ Rules:
 2. Meaning is the first priority. Width limits are secondary.
 3. Keep complete meaning units together when possible.
 4. Split at clear clause boundaries when both sides remain understandable.
-5. Never split inside a word, term, name, fixed expression, product name, or noun phrase. For example, do not split inside `竖屏`.
-6. Do not leave dangling fragments such as "which can help me find" or "out whether this is".
-7. For vertical videos, prefer shorter cards, but not at the cost of splitting a word or damaging meaning.
-8. If changing boundaries, keep timestamps monotonic and IDs sequential.
-
-Example:
-
-```text
-Weak:
-[1] I just found this AI tool which can help me find
-[2] out what to post every day.
-
-Better:
-[1] I just found this AI tool,
-[2] which can help me find what to post every day.
-```
+5. Never split inside a word, term, name, fixed expression, product name, or noun phrase.
+6. For vertical videos, prefer shorter cards, but not at the cost of splitting a word or damaging meaning.
+7. If changing boundaries, keep timestamps monotonic and IDs sequential.
 
 ## Step 3 - Translate With Context
 
