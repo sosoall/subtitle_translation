@@ -18,7 +18,7 @@
 ### 相比剪映/CapCut 自动字幕翻译的优势
 
 - 翻译更准确：翻译时会看上下文，不容易因为一句话被切开而丢失意思。
-- 横竖屏自适配：会根据视频是横屏、竖屏还是方形，自动控制每条字幕的长度，竖屏也更容易放得下。
+- 横竖屏自适配：会根据视频是横屏、竖屏还是方形，自动控制每条字幕的屏幕宽度，竖屏会切得更短。
 - 按意思断句：会检查字幕片段是否表达完整，避免断句破坏原句意思。
 - 输出 SRT：方便导入剪映/CapCut 后继续编辑字幕样式，而不是直接烧录到视频里。
 
@@ -35,6 +35,17 @@
 - `translations.json`：每条字幕对应的翻译
 
 真正需要导入剪映/CapCut 的是 `.srt` 文件。
+
+### 字幕长度如何控制
+
+脚本会根据视频比例自动选择横屏、竖屏或方形字幕长度。参数名仍然叫 `--max-chars` 和 `--soft-chars`，但实际含义更接近“屏幕显示宽度”：
+
+- 中文、日文、韩文等全宽字符大约按 2 个宽度单位计算。
+- 英文字母、数字大约按 1 个宽度单位计算。
+- 空格也会占宽度。
+- `--min-chars 5` 保持为非空白字符数下限，用来避免太短的碎片。
+
+第一轮切分会先看原文。翻译后，Agent 还会检查译文是否过长：如果译文太长，会优先压缩翻译；如果仍然放不下，再按语义拆分原片段。竖屏视频会比横屏更严格。
 
 ### 推荐工作流
 
@@ -180,7 +191,7 @@ It does not burn subtitles into the video. It outputs an editable subtitle file.
 ### Advantages Over Built-In CapCut/Jianying Subtitle Translation
 
 - More accurate translation: it translates with surrounding context, so meaning is less likely to be lost when a sentence is split.
-- Landscape/portrait adaptation: it adjusts subtitle length for landscape, portrait, or square videos, so vertical videos are less likely to overflow.
+- Landscape/portrait adaptation: it adjusts subtitle display width for landscape, portrait, or square videos, with stricter limits for vertical videos.
 - Meaning-aware breaks: it reviews sentence boundaries so subtitles do not split in ways that damage the meaning.
 - SRT output: it produces subtitle files that can still be styled and edited in CapCut/Jianying.
 
@@ -197,6 +208,17 @@ Intermediate files may include:
 - `translations.json`: translations by subtitle ID
 
 The file you import into CapCut/Jianying is the `.srt` file.
+
+### How Subtitle Length Is Controlled
+
+The script auto-selects subtitle budgets for landscape, portrait, or square videos. The option names are still `--max-chars` and `--soft-chars`, but they now behave more like display-width budgets:
+
+- Chinese, Japanese, Korean, and other full-width characters count as about 2 width units.
+- Latin letters and digits count as about 1 width unit.
+- Spaces also take width.
+- `--min-chars 5` stays as a non-whitespace character floor to avoid tiny fragments.
+
+The first pass segments the source transcript. After translation, the agent should also check whether the translated line is too long. If it is, it should first make the translation more concise; if that still does not fit, it should split the source segment at a semantic boundary and translate the new segments. Portrait videos are treated more strictly than landscape videos.
 
 ### Recommended Workflow
 

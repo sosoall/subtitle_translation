@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from typing import Any, Dict, List, Optional
 
 
@@ -305,6 +306,21 @@ def text_len(text: str) -> int:
     return len(re.sub(r"\s+", "", text))
 
 
+def display_width(text: str) -> int:
+    """Approximate subtitle display width across CJK and Latin scripts."""
+    width = 0
+    for char in text:
+        if char.isspace():
+            width += 1
+        elif unicodedata.combining(char):
+            continue
+        elif unicodedata.east_asian_width(char) in {"F", "W"}:
+            width += 2
+        else:
+            width += 1
+    return width
+
+
 def word_gap(prev_word: Dict[str, Any], next_word: Dict[str, Any]) -> float:
     prev_end = float(prev_word.get("end", prev_word.get("start", 0)))
     next_start = float(next_word.get("start", prev_end))
@@ -348,7 +364,8 @@ def should_break(current_words: List[Dict[str, Any]], next_word: Optional[Dict[s
         return False
 
     text = join_words(current_words)
-    length = text_len(text)
+    min_length = text_len(text)
+    width = display_width(text)
     duration = current_words[-1]["end"] - current_words[0]["start"]
     last_char = text[-1] if text else ""
     gap = word_gap(current_words[-1], next_word) if next_word else math.inf
@@ -357,11 +374,11 @@ def should_break(current_words: List[Dict[str, Any]], next_word: Optional[Dict[s
         return True
     if last_char in STRONG_PUNCT:
         return True
-    if last_char in SOFT_PUNCT and length >= min_chars:
+    if last_char in SOFT_PUNCT and min_length >= min_chars:
         return True
-    if length >= soft_chars and gap >= max_gap:
+    if width >= soft_chars and gap >= max_gap:
         return True
-    if length >= max_chars:
+    if width >= max_chars:
         return True
     if duration >= max_secs and gap >= max_gap:
         return True
@@ -461,9 +478,9 @@ def main():
     p.add_argument("--subtitle-mode", default="bilingual", choices=MODE_CHOICES,
                    help="Subtitle output style used to choose length presets. Default: bilingual")
     p.add_argument("--max-chars", type=int, default=None,
-                   help="Override max source characters per subtitle card.")
+                   help="Override max display-width units per source subtitle card.")
     p.add_argument("--soft-chars", type=int, default=None,
-                   help="Override length where pause breaks are preferred.")
+                   help="Override display-width units where pause breaks are preferred.")
     p.add_argument("--min-chars", type=int, default=None,
                    help="Override minimum source characters before punctuation breaks. Default from preset: 5")
     p.add_argument("--max-secs", type=float, default=7.0,

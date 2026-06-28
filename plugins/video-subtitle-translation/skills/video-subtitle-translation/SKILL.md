@@ -88,12 +88,18 @@ python3 /path/to/skill/scripts/transcribe.py \
   --lang zh
 ```
 
-Default layout presets:
+Default layout presets keep the existing `--max-chars`, `--soft-chars`, and `--min-chars` option names. In the script, `max` and `soft` are now display-width budgets, not raw character counts: CJK/full-width characters count roughly as 2 units, Latin letters/digits count as 1 unit, and spaces count as 1 unit. `min-chars` remains a non-whitespace character floor so very short fragments are still merged.
 
 | Mode | Portrait | Square | Landscape |
 |---|---|---|---|
 | `bilingual` | `--max-chars 22 --soft-chars 14 --min-chars 5` | `--max-chars 26 --soft-chars 18 --min-chars 5` | `--max-chars 28 --soft-chars 20 --min-chars 5` |
 | `translated` | `--max-chars 26 --soft-chars 18 --min-chars 5` | `--max-chars 32 --soft-chars 22 --min-chars 5` | `--max-chars 42 --soft-chars 28 --min-chars 5` |
+
+These presets are applied to the source transcript during first-pass segmentation. After translation, also check the translated line against the same layout goal:
+
+- In `bilingual` mode, both the source line and translated line must be comfortable for the video layout.
+- In `translated` mode, the translated line is the primary display constraint.
+- For portrait videos, be stricter than landscape. If in doubt, split shorter.
 
 ## Step 2 - Review Sentence Breaks
 
@@ -138,6 +144,13 @@ Better:
 Do not call an external translation API unless the user explicitly asks. Translate the reviewed segments yourself with full context.
 
 For long files, work in batches of about 150 segments with 15-20 overlapping context segments. Preserve IDs exactly. If a translation becomes unclear because the source break is bad, revise the reviewed segments first, then translate again.
+
+After translation, do a layout pass before writing SRT:
+
+1. Compare source and translation lengths by approximate display width, not just raw characters.
+2. If a translation is too long for the detected layout, first make the translation more concise while preserving meaning.
+3. If concise translation is still too long, split the source segment at a clear semantic boundary, adjust timestamps proportionally when needed, then translate the new segments.
+4. Keep portrait videos tighter than landscape because bilingual subtitles need two readable lines.
 
 Prompt pattern:
 
